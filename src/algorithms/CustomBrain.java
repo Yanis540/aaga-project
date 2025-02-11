@@ -40,11 +40,7 @@ public class CustomBrain extends Brain {
       }
       return;
     }
-    if(detectFront().getObjectType() == IFrontSensorResult.Types.TeamMainBot 
-    || detectFront().getObjectType() == IFrontSensorResult.Types.TeamSecondaryBot){
-      
-      return;
-    }
+    
     if(detectFront().getObjectType() != IFrontSensorResult.Types.WALL){
       move();
       return ;
