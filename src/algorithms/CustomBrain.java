@@ -9,16 +9,22 @@ package algorithms;
 import robotsimulator.Brain;
 import characteristics.IFrontSensorResult;
 import characteristics.Parameters;
+import playground.PlayingArea;
 
 public class CustomBrain extends Brain {
   public CustomBrain() { super(); }
   private double oldAngle=0;
   private boolean updated_old_angle = false;
   private boolean is_initial = true;
-
+  private int playground_height,playground_width;
   public void activate() {
     //---PARTIE A MODIFIER/ECRIRE---//
-      //moveBack();      
+      //moveBack(); 
+    var p = new PlayingArea();
+    this.playground_height = p.getHeight();  
+    this.playground_width = p.getWidth();  
+
+
       
   }
   public void step() {
@@ -40,7 +46,9 @@ public class CustomBrain extends Brain {
       }
       return;
     }
-    
+    if(detectFront().getObjectType() ==IFrontSensorResult.Types.TeamMainBot || detectFront().getObjectType() ==IFrontSensorResult.Types.TeamSecondaryBot ){
+      return;
+    }
     if(detectFront().getObjectType() != IFrontSensorResult.Types.WALL){
       move();
       return ;
