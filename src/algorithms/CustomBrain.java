@@ -50,13 +50,7 @@ public class CustomBrain extends Brain {
     this.quarterSouth = this.playground_width / 4.0;
     this.halfSouth = this.playground_width / 2.0;
     this.threeQuarterSouth = 3 * this.playground_width / 4.0;
-    try{
-   
-      System.out.println("Engine: " + engine);
-    }
-    catch(Exception e){
-      System.out.println("Error");
-    }
+  
   }
 
   public void step() {
