@@ -4,7 +4,7 @@
  * GPL version>=3 <http://www.gnu.org/licenses/>.
  * $Id: algorithms/Stage1.java 2014-10-18 buixuan.
  * ******************************************************/
-package algorithms;
+package algorithms.stage;
 
 import robotsimulator.Brain;
 import characteristics.Parameters;
@@ -28,6 +28,7 @@ public class Stage4SecondaryA extends Brain {
   private static final int MOVEEASTTASK = 4;
   private static final int FREEZE = -1;
   private static final int SINK = 0xBADC0DE1;
+  
 
   //---VARIABLES---//
   private int state;
