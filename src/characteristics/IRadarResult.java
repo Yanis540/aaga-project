@@ -6,7 +6,9 @@
  * ******************************************************/
 package characteristics;
 
-public interface IRadarResult {
+import java.io.Serializable;
+
+public interface IRadarResult extends Serializable {
   public static enum Types { OpponentMainBot, OpponentSecondaryBot, TeamMainBot, TeamSecondaryBot, Wreck, BULLET };
   //--------------------------------------------------------//
   //---SIMULATOR-PROVIDED-METHODS---------------------------//

@@ -1,6 +1,7 @@
 {
     "java.project.referencedLibraries": [
         "lib/**/*.jar",
-        "jars/simulator.jar"
+        "jars/simulator.jar",
+        "jars/fifth.jar"
     ]
 }
