@@ -4,8 +4,12 @@ import commun.State.Action;
 import events.Orders.OrdersType;
 import helpers.Coords;
 import helpers.MathHelp;
+
+import java.util.List;
 import java.util.Random;
 import java.util.function.Consumer;
+
+import characteristics.Parameters;
 
 public class Strategie {
   private State initState;
@@ -157,12 +161,24 @@ public class Strategie {
     return new Strategie(start, end, "moveNStep", false, null);
   }
 
-  private static Strategie blocked() {
+  public static Strategie blocked() {
     State start = new State(
-        data -> System.err.println(data.getRobotID() + " is blocked"));
+        data -> {
+            System.err.println(data.getRobotID() + " is blocked");
+            data.log("Entering blocked state");
+        });
+
     Strategie turn = turnUntilAngle();
     turn.setEnv(
-        data -> data.setHeadingTarget(data.getHeading() + (0.7853982 * 2)));
+      data -> {
+        // data.setHeadingTarget(data.getHeading() + (0.7853982 * 2));
+        // System.out.println(data.getRobotID()+" is Turning to new heading: " + data.getHeadingTarget());
+      
+          // Si c'est un autre obstacle, tourner de 90 degrés (1.5708 radians)
+          data.setHeadingTarget(data.getHeading() +MathHelp.SOUTH);
+          data.log("Turning 90 degrees to avoid obstacle");
+          System.out.println(data.getRobotID()+" Turning 90 degrees to avoid obstacle");
+      });
 
     State endMove = new State(Action.NOTHING);
     Strategie runBack = moveNStep(30);
@@ -181,7 +197,7 @@ public class Strategie {
     Strategie dodge = goToPosition();
     dodge.setEnv(data -> {
       Coords attacked = data.getTargetPosition();
-      double maxRange = data.getRange() + (data.getSpeed() * 3);
+      double maxRange = data.getRange() + (data.getSpeed() * Parameters.teamASecondaryBotSpeed);
       double angle = MathHelp.normalizeAngle(
           attacked.angleTo(data.getPosition()) + MathHelp.EPSILON);
       Coords target = new Coords(maxRange * Math.cos(angle) + attacked.getX(),

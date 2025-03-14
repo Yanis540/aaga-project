@@ -9,7 +9,15 @@ import java.util.Map;
 import java.util.Optional;
 
 public class GlobalData {
-  public static final Coords maxCoords = new Coords(3248, 2248);
+  public static final int MAX_X = 3248, MAX_Y = 2248;
+  public static final Coords maxCoords = new Coords(MAX_X, MAX_Y);
+    // Définir les positions des quatre coins de la carte
+  public static final Coords[] corners = {
+      new Coords(0, 0),
+      new Coords(0, MAX_Y),
+      new Coords(MAX_X, MAX_Y),
+      new Coords(MAX_X, 0)
+  };
   private final Map<Integer, Coords> allyPositions = new HashMap<>();
   private final Map<Integer, Boolean> allyStates = new HashMap<>();
   private final ArrayList<Coords> wreckPositions = new ArrayList<>();
@@ -35,6 +43,7 @@ public class GlobalData {
                                      : Parameters.teamASecondaryBotSpeed);
     });
   }
+  public ArrayList<Bullet> getBulletPositionsList() { return bulletPositions; }
 
   public boolean areSecondariesAlive() {
     return allyStates.entrySet().stream().anyMatch(
@@ -51,7 +60,7 @@ public class GlobalData {
   }
 
   public boolean isEnnemyPresent() { return !opponentPositions.isEmpty(); }
-
+ 
   public void addBullet(Coords newBullet) {
     Optional<Bullet> optBullet =
         bulletPositions.stream()

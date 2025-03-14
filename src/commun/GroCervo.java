@@ -79,8 +79,10 @@ public abstract class GroCervo extends Brain {
       }
     });
     Collections.sort(incomingEvents);
-    for (Event event : incomingEvents)
+    for (Event event : incomingEvents){
+      sendLogMessage(id+" Event : "+event);
       event.updateGlobalData(globalData);
+    }
 
     createdEvents.add(
         new LocalizedRadar(getPosition(), detectRadar(), getRobotID()));
@@ -116,6 +118,7 @@ public abstract class GroCervo extends Brain {
     Coords calulatedPos;
     switch (action) {
     case MOVING:
+    sendLogMessage(getRobotID()+"  is moving");
       calulatedPos = calulateMoveResult(true);
       if (!isStuck() && !isDead() && calulatedPos.isValid()) {
         getPosition().setAs(calulatedPos);
@@ -126,6 +129,8 @@ public abstract class GroCervo extends Brain {
       break;
     case MOVING_BACK:
       calulatedPos = calulateMoveResult(false);
+      System.err.println(getRobotID()+"  is trying to Moving back");
+      sendLogMessage(getRobotID()+"  is trying to Moving back");
       if (!isStuck() && !isDead() && calulatedPos.isValid()) {
         getPosition().setAs(calulatedPos);
         lastEvent = new MyPos(getPosition(), id, !isDead());
@@ -140,15 +145,18 @@ public abstract class GroCervo extends Brain {
       stepTurn(Direction.RIGHT);
       break;
     case SHOOT:
+    sendLogMessage(getRobotID()+"  shooting");
+
       fire(getPosition().angleTo(getTargetPosition()));
       break;
     case NOTHING:
+    sendLogMessage(getRobotID()+"  is doing nothing");
       break;
     }
     if (lastEvent != null)
       createdEvents.add(lastEvent);
   }
-
+  
   @Override
   public void activate() {
     Coords initialPosition;
@@ -389,7 +397,7 @@ public abstract class GroCervo extends Brain {
   }
 
   public boolean isStuck() { return isBlocked(); }
-
+  public boolean areSecondariesDead() { return !getGlobalData().areSecondariesAlive(); }
   public boolean enemyBecomeWreck() {
     return getGlobalData().getWreckPositions().stream().anyMatch(
         b -> b.inRange(getTargetPosition(), getSpeed() * 2));
