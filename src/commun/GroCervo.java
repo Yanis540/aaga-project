@@ -80,7 +80,7 @@ public abstract class GroCervo extends Brain {
     });
     Collections.sort(incomingEvents);
     for (Event event : incomingEvents){
-      sendLogMessage(id+" Event : "+event);
+      // sendLogMessage(id+" Event : "+event);
       event.updateGlobalData(globalData);
     }
 
@@ -118,7 +118,7 @@ public abstract class GroCervo extends Brain {
     Coords calulatedPos;
     switch (action) {
     case MOVING:
-    sendLogMessage(getRobotID()+"  is moving");
+    // sendLogMessage(getRobotID()+"  is moving");
       calulatedPos = calulateMoveResult(true);
       if (!isStuck() && !isDead() && calulatedPos.isValid()) {
         getPosition().setAs(calulatedPos);
@@ -130,7 +130,7 @@ public abstract class GroCervo extends Brain {
     case MOVING_BACK:
       calulatedPos = calulateMoveResult(false);
       System.err.println(getRobotID()+"  is trying to Moving back");
-      sendLogMessage(getRobotID()+"  is trying to Moving back");
+      // sendLogMessage(getRobotID()+"  is trying to Moving back");
       if (!isStuck() && !isDead() && calulatedPos.isValid()) {
         getPosition().setAs(calulatedPos);
         lastEvent = new MyPos(getPosition(), id, !isDead());
@@ -145,12 +145,12 @@ public abstract class GroCervo extends Brain {
       stepTurn(Direction.RIGHT);
       break;
     case SHOOT:
-    sendLogMessage(getRobotID()+"  shooting");
+    // sendLogMessage(getRobotID()+"  shooting");
 
       fire(getPosition().angleTo(getTargetPosition()));
       break;
     case NOTHING:
-    sendLogMessage(getRobotID()+"  is doing nothing");
+    // sendLogMessage(getRobotID()+"  is doing nothing");
       break;
     }
     if (lastEvent != null)

@@ -9,6 +9,8 @@ package algorithms.home;
 import characteristics.IFrontSensorResult;
 import characteristics.IRadarResult;
 import characteristics.Parameters;
+import commun.GroCervo;
+import helpers.MathHelp;
 import robotsimulator.Bot;
 import robotsimulator.Brain;
 import robotsimulator.SimulatorEngine;
@@ -17,6 +19,7 @@ import javax.swing.Timer;
 import java.util.*;
 import java.util.stream.Stream;
 
+  
 
 public class Main extends Brain {
     private static final double POS_PRECISION = 1;
@@ -25,12 +28,16 @@ public class Main extends Brain {
     private static final double BULLET_RADIUS = 5;
     private static final double BOT_BULLET_RADIUS = BOT_RADIUS + BULLET_RADIUS;
     private static boolean isTeamA = true;
-    
+    private static int robotId = 0;
+    private int myId = 0;
 
     public Main() {
         super();
+        this.myId = robotId;
+        robotId++;
     }
 
+    public static boolean isMain(Integer id) { return id < 3; }
 
     private static final Random gen = new Random(1);
 
@@ -87,11 +94,11 @@ public class Main extends Brain {
         return isScout ? Parameters.teamASecondaryBotSpeed : Parameters.teamAMainBotSpeed;
     }
 
-    static boolean cmpPos(double a, double b) {
+    static boolean comparePosition(double a, double b) {
         return Math.abs(a - b) < POS_PRECISION;
     }
 
-    static boolean cmpAngle(double a, double b) {
+    static boolean compareAngles(double a, double b) {
         double value = Math.abs(a - b) % (Math.PI * 2);
         return value < ANGLE_PRECISION || value > Math.PI * 2 - ANGLE_PRECISION;
     }
@@ -130,16 +137,16 @@ public class Main extends Brain {
 
         Boolean foundTeamA = null, foundUp = null;
         for (var o: detectRadar()) {
-            if (cmpAngle(o.getObjectDirection(), Parameters.NORTH)) {
+            if (compareAngles(o.getObjectDirection(), Parameters.NORTH)) {
                 foundUp = true;
             }
-            if (cmpAngle(o.getObjectDirection(), Parameters.SOUTH)) {
+            if (compareAngles(o.getObjectDirection(), Parameters.SOUTH)) {
                 foundUp = false;
             }
-            if (cmpAngle(o.getObjectDirection(), Parameters.EAST)) {
+            if (compareAngles(o.getObjectDirection(), Parameters.EAST)) {
                 foundTeamA = !isScout;
             }
-            if (cmpAngle(o.getObjectDirection(), Parameters.WEST)) {
+            if (compareAngles(o.getObjectDirection(), Parameters.WEST)) {
                 foundTeamA = isScout;
             }
         }
@@ -251,7 +258,7 @@ public class Main extends Brain {
                 return false;
             }
         });
-        if (!isScout) addTask(new Task(8_000_000, true) {
+        if (!isScout) addTask(new Task(9_000_000, true) {
             @Override
             boolean step() {
                 var targetClear = getRelativeTargets()
@@ -262,11 +269,20 @@ public class Main extends Brain {
                     .min(Comparator.comparingDouble(t -> t.coords().norm())).orElse(null);
 
                 if (targetClear != null) {
+                    var nearestTarget = getRelativeTargets()
+                        .filter(t -> turn - t.turn < 200)
+                        .filter(Target::enemy)
+                        .min(Comparator.comparingDouble(t -> t.coords().norm()))
+                        .orElse(null);
+
+                    if (nearestTarget != null && nearestTarget.coords().norm() < targetClear.coords().norm()) {
+                        targetClear = nearestTarget; // Change de cible si une plus proche est trouvée
+                    }
+
                     Coords t = tryFindAngle(Coords.ZERO, targetClear);
                     if (t != null) {
                         sendLogMessage(id + " firing at " + t);
                         if (tryFire(t.angle())) return true;
-                        if (targetClear.coords.norm() < 800) return true;
                         return false;
                     }
                 }
@@ -277,8 +293,8 @@ public class Main extends Brain {
         if (!isScout) addTask(new Task(7_500_000, true) {
             @Override
             boolean step() {
-                double angle = getHeading(), coeff = 0.3;
-                double minAngle = normalizeAngle(angle - 0.5 * coeff), maxAngle = normalizeAngle(angle + 0.5 * coeff);
+                double angle = getHeading(), coeff = 0.2;
+                double minAngle = normalizeAngle(angle - 0.2 * coeff), maxAngle = normalizeAngle(angle + 0.5 * coeff);
                 if (getRelativeTargets().filter(t -> turn - t.turn < 10).filter(Target::friendly).anyMatch(t -> {
                     if (t.coords.norm() < 99) return false;
                     double tAngle = t.coords().angle();
@@ -451,6 +467,9 @@ public class Main extends Brain {
         boolean bullet() {
             return type == IRadarResult.Types.BULLET;
         }
+        boolean notWreck() {
+            return type != IRadarResult.Types.Wreck;
+        }
         Coords coordsAtTurn(int t) {
             if (prevCoords == null) return coords;
             return prevCoords.plus(coords.minus(prevCoords).times((t - prevTurn) / (double) (turn - prevTurn)));
@@ -459,7 +478,7 @@ public class Main extends Brain {
             return new Target(coords.minus(pos), turn, prevCoords == null ? null : prevCoords.minus(pos), prevTurn, type);
         }
     }
-
+  
     private static class TargetSet extends ArrayList<Target> implements Set<Target> {
         @Override
         public boolean add(Target target) {
@@ -540,7 +559,7 @@ public class Main extends Brain {
         firedTurn = turn;
         return true;
     }
-
+ 
     private Coords tryFindAngle(Coords from, Target to) {
         double time = to.coords.minus(from).norm() / Parameters.bulletVelocity;
         Coords futureCoords = to.coordsAtTurn(turn + (int) Math.ceil(time));
@@ -575,7 +594,7 @@ public class Main extends Brain {
             if (!t.persistent) it.remove();
         }
 
-        throw new RuntimeException("Dont have anything to do");
+       System.out.println("Dont have anything to do !");
     }
 }
 
@@ -583,6 +602,10 @@ record Coords(double x, double y) {
     public Coords {
         if (Double.isNaN(x) || Double.isNaN(y)) throw new IllegalArgumentException();
     }
+    
+    public double getX() { return x; }
+
+    public double getY() { return y; }
 
     public Coords plus(Coords other) {
         return new Coords(x + other.x, y + other.y);
@@ -638,9 +661,17 @@ record Coords(double x, double y) {
 
         Coords coords = (Coords) o;
 
-        if (!Main.cmpPos(x, coords.x))return false;
-        return Main.cmpPos(y, coords.y);
+        if (!Main.comparePosition(x, coords.x))return false;
+        return Main.comparePosition(y, coords.y);
     }
+    public boolean inRange(Coords other, double range) {
+        return distanceTo(other) <= range;
+      }
+      public double distanceTo(Coords other) {
+        return Math.sqrt(Math.pow(other.getX() - x, 2) +
+                         Math.pow(other.getY() - y, 2));
+      }
+    
 
     @Override
     public int hashCode() {
