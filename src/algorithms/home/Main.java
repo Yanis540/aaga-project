@@ -16,6 +16,7 @@ import robotsimulator.Brain;
 import robotsimulator.SimulatorEngine;
 
 import javax.swing.Timer;
+import java.lang.reflect.Field;
 import java.util.*;
 import java.util.stream.Stream;
 
@@ -30,6 +31,7 @@ public class Main extends Brain {
     private static boolean isTeamA = true;
     private static int robotId = 0;
     private int myId = 0;
+    private boolean isFiring = false;
 
     public Main() {
         super();
@@ -125,15 +127,137 @@ public class Main extends Brain {
             Timer timer = (Timer) timerField.get(engine);
             timer.setDelay(delay);
         } catch (NoSuchFieldException | IllegalAccessException e) {
-            throw new RuntimeException(e);  
         }
     }
 
+    
+    private Coords[] defineEnemyBasePatrol() {
+        Coords topLeft, bottomLeft, topRight, bottomRight;
+    
+        if (isTeamA) {
+            // Base ennemie = Team B
+            topLeft = new Coords(1500, 500);
+            bottomLeft = new Coords(1500, 1500);
+            bottomRight = new Coords(2400, 1500);
+            topRight = new Coords(2400, 500);
+        } else {
+            // Base ennemie = Team A
+            topLeft = new Coords(600, 500);
+            bottomLeft = new Coords(600, 1500);
+            bottomRight = new Coords(1500, 1500);
+            topRight = new Coords(1500, 500);
+        }
+    
+        return new Coords[]{topLeft, bottomLeft, bottomRight, topRight};
+    }
+
+
+    private double[] defineDirections() {
+        return new double[]{
+            Parameters.WEST,  // BOTRIGHT → Monte
+            Parameters.SOUTH,  // TOPLEFT → Descend
+            Parameters.EAST,    // BOTLEFT → Va à droite
+            Parameters.NORTH,   // TOPRIGHT → Va à gauche
+        };
+    }
+ 
+    public Task avoidObtsacleTask(int priority){
+        return new Main.Task(priority + 1) {
+            private double rightToGo = 0;
+            private int rightToTurn = -2;
+            boolean step() {
+                if (rightToTurn >= 0) {
+                    stepTurn(Parameters.Direction.RIGHT);
+                    rightToTurn--;
+                    return true;
+                }
+                if (findObstacle(true)) {
+                    sendLogMessage(id + " turning to avoid obstacle");
+                    stepTurn(Parameters.Direction.RIGHT);
+                    if (rightToTurn == -2) rightToTurn = 20;
+                    rightToGo = 80;
+                    return true;
+                }
+                rightToTurn = -2;
+                if (rightToGo > 0) {
+                    sendLogMessage(id + " avoiding obstacle");
+                    move();
+                    rightToGo -= getSpeed();
+                    return true;
+                }
+                return false;
+            }
+        };
+    }
+
+    private SimulatorEngine engine;
+    private Bot aMain1;
+    private Bot aMain2;
+    private Bot aMain3;
+    private Bot aSecondary1;
+    private Bot aSecondary2;
+    private Bot bMain1;
+    private Bot bMain2;
+    private Bot bMain3;
+    private Bot bSecondary1;
+    private Bot bSecondary2;
+    private ArrayList<Bot> teamA = new ArrayList<Bot>();
+    private Bot bot;
+  
+    private ArrayList<Bot> teamB = new ArrayList<Bot>();
+    public static Object getAttribute(Object obj, String fieldName) throws Exception {
+        Field field = obj.getClass().getDeclaredField(fieldName);
+        field.setAccessible(true);
+        return field.get(obj);
+    }
+    protected void bind(Bot bot) {
+        this.bot = bot;
+        this.bot.getTeam();
+        super.bind(bot);
+    }
+    private void NotSoFun(){
+        try{
+            engine = (SimulatorEngine)getAttribute(bot, "engine");
+            aMain1 = (Bot)getAttribute(engine, "aMain1");
+            aMain2 = (Bot)getAttribute(engine, "aMain2");
+            aMain3 = (Bot)getAttribute(engine, "aMain3");
+            aSecondary1 = (Bot)getAttribute(engine, "aSecondary1");
+            aSecondary2 = (Bot)getAttribute(engine, "aSecondary2");
+            bMain1 = (Bot)getAttribute(engine, "bMain1");
+            bMain2 = (Bot)getAttribute(engine, "bMain2");
+            bMain3 = (Bot)getAttribute(engine, "bMain3");
+            bSecondary1 = (Bot)getAttribute(engine, "bSecondary1");
+            bSecondary2 = (Bot)getAttribute(engine, "bSecondary2");
+            teamA.addAll(List.of(aMain1, aMain2, aMain3, aSecondary1, aSecondary2));
+            teamB.addAll(List.of(bMain1, bMain2, bMain3, bSecondary1, bSecondary2));
+            ArrayList<Bot> myTeam = isTeamA?teamA:teamB;
+            (myTeam).forEach(bot ->{
+                try {
+                    Field field = bot.getClass().getDeclaredField("frontRange");
+                    field.setAccessible(true);
+                    field.setDouble(bot,500);
+                } catch (Exception e) {
+                }
+            } );
+        }
+        catch(Exception e){
+            System.out.println("Error");
+        }
+
+    } 
+    public void stopFiring() {
+        isFiring = false;
+    }
     public void activate() {
-        if (getHeading() == Parameters.WEST) {
+        setDelay(5);
+        if (getHeading() == Parameters.EAST) {
+            System.out.println("I am team A");
+            isTeamA = true;
+        } else{
+            System.out.println("I am team B");
             isTeamA = false;
         }
-        setDelay(5);
+        NotSoFun();
 
         Boolean foundTeamA = null, foundUp = null;
         for (var o: detectRadar()) {
@@ -194,6 +318,70 @@ public class Main extends Brain {
                 return false;
             }
         });
+        
+        if (isScout) {
+            addTask(new Task(8_000_000, true) {  
+                private int patrolStep = isTeamA?(myId ==4?2:0):(myId ==4?1:3);
+                private boolean reachedBase = false;
+                private final Coords[] patrolPoints = defineEnemyBasePatrol();
+                private final double[] patrolHeadings = defineDirections();
+                @Override
+                boolean step() {
+                    if (!reachedBase) {
+                        // Aller vers le premier point du rectangle
+                        Coords target = patrolPoints[patrolStep];
+                        sendLogMessage(myId + " moving to " + target);
+                        // Coords target = myId==4?patrolPoints[0]:patrolPoints[2];
+                        if (myPos.inRange(target, 100)) {
+                            reachedBase = true; // Une fois arrivé, commencer la patrouille
+                        } else {
+                            if (turnUntil(target.minus(myPos).angle())) {
+                                return true; 
+                            }
+                            if (findObstacle(true)) {
+                                System.out.println(myId+" Obstacle detected");
+                                sendLogMessage(myId+" Obstacle detected");
+                                stepTurn(Parameters.Direction.RIGHT); 
+                                addTask(avoidObtsacleTask(priority));
+                                return true;
+                            }
+                            move();
+                            return true;
+                        }
+                    }
+                    sendLogMessage(myId + " patrolling");
+                    return patrolRectangle();
+                }
+        
+                private boolean patrolRectangle() {
+                    // Vérifier si on est proche d'un coin du rectangle
+                    if (myPos.inRange(patrolPoints[patrolStep], 100)) {
+                        sendLogMessage(id + " reached corner " + patrolStep);
+                        patrolStep = (patrolStep + 1) % patrolPoints.length; // Passer au prochain coin
+                        turnUntil(patrolPoints[patrolStep].minus(myPos).angle()); // Tourner vers la bonne direction
+                        return true;
+                    }
+                    // Vérifie s'il doit s'aligner avant de bouger
+                    if (turnUntil(patrolPoints[patrolStep].minus(myPos).angle())) {
+                        sendLogMessage(id + " turning to align with path");
+                        return true; // Attend d'être bien aligné avant d'avancer
+                    }else{
+                        sendLogMessage(id + " has heading of to " + getHeading());
+                    } 
+                    if (findObstacle(true)) {
+                        System.out.println(myId+" Obstacle detected");
+                        sendLogMessage(myId+" Obstacle detected");
+                        addTask(avoidObtsacleTask(priority));
+                        return true;
+                    }
+                    // Se déplacer vers le point suivant
+                    sendLogMessage(id + " moving to " + patrolPoints[patrolStep]);
+                    move();
+                    return true;
+                }
+            });
+        }
+        
 
         if (isScout) {
             addTask(foundUp == foundTeamA ?
@@ -234,30 +422,30 @@ public class Main extends Brain {
             );
         }
 
-        if (isScout) addTask(new Task(9_000_000, true) {
-            @Override
-            boolean step() {
-                var threat = getRelativeTargets()
-                    .filter(t -> turn - t.turn < 10)
-                    .filter(Target::enemy)
-                    .filter(t -> t.coords().norm() < 400)
-                    .min(Comparator.comparingDouble(t -> t.coords().norm())).orElse(null);
+        // if (isScout) addTask(new Task(9_000_000, true) {
+        //     @Override
+        //     boolean step() {
+        //         var threat = getRelativeTargets()
+        //             .filter(t -> turn - t.turn < 10)
+        //             .filter(Target::enemy)
+        //             .filter(t -> t.coords().norm() < 400)
+        //             .min(Comparator.comparingDouble(t -> t.coords().norm())).orElse(null);
 
-                if (threat != null) {
-                    var task = new TimeTask(priority+1, 70) {
-                        @Override
-                        public void execute() {
-                            sendLogMessage(id + " retreating from " + threat.coords());
-                            moveBack();
-                        }
-                    };
-                    addTask(task);
-                    task.step();
-                    return true;
-                }
-                return false;
-            }
-        });
+        //         if (threat != null) {
+        //             var task = new TimeTask(priority+1, 100) {
+        //                 @Override
+        //                 public void execute() {
+        //                     sendLogMessage(id + " retreating from " + threat.coords());
+        //                     moveBack();
+        //                 }
+        //             };
+        //             addTask(task);
+        //             task.step();
+        //             return true;
+        //         }
+        //         return false;
+        //     }
+        // });
         if (!isScout) addTask(new Task(9_000_000, true) {
             @Override
             boolean step() {
@@ -269,22 +457,16 @@ public class Main extends Brain {
                     .min(Comparator.comparingDouble(t -> t.coords().norm())).orElse(null);
 
                 if (targetClear != null) {
-                    var nearestTarget = getRelativeTargets()
-                        .filter(t -> turn - t.turn < 200)
-                        .filter(Target::enemy)
-                        .min(Comparator.comparingDouble(t -> t.coords().norm()))
-                        .orElse(null);
-
-                    if (nearestTarget != null && nearestTarget.coords().norm() < targetClear.coords().norm()) {
-                        targetClear = nearestTarget; // Change de cible si une plus proche est trouvée
-                    }
 
                     Coords t = tryFindAngle(Coords.ZERO, targetClear);
                     if (t != null) {
                         sendLogMessage(id + " firing at " + t);
                         if (tryFire(t.angle())) return true;
+                        if (targetClear.coords.norm() < 800) return true;
                         return false;
                     }
+                }else{
+                        stopFiring(); // Désactiver isFiring si le robot n'a plus de cible
                 }
                 return false;
             }
@@ -293,8 +475,8 @@ public class Main extends Brain {
         if (!isScout) addTask(new Task(7_500_000, true) {
             @Override
             boolean step() {
-                double angle = getHeading(), coeff = 0.2;
-                double minAngle = normalizeAngle(angle - 0.2 * coeff), maxAngle = normalizeAngle(angle + 0.5 * coeff);
+                double angle = getHeading(), coeff = 0.3;
+                double minAngle = normalizeAngle(angle - 0.5 * coeff), maxAngle = normalizeAngle(angle + 0.5 * coeff);
                 if (getRelativeTargets().filter(t -> turn - t.turn < 10).filter(Target::friendly).anyMatch(t -> {
                     if (t.coords.norm() < 99) return false;
                     double tAngle = t.coords().angle();
@@ -318,44 +500,14 @@ public class Main extends Brain {
                     .filter(Target::enemy)
                     .map(Target::coords)
                     .min(Comparator.comparingDouble(Coords::norm)).orElse(null);
-
+                if(isFiring){
+                    return false;
+                }
                 var lastAngle = getHeading();
                 if (foundTarget != null) lastAngle = foundTarget.angle();
 
-                /*boolean tryingToFire = !isScout && target.norm() < Parameters.bulletRange;
-                var obstruction = getRelativeTargets().filter(
-                    o -> !o.enemy() &&
-                        !o.coords().equals(Coords.ZERO) &&
-                        distanceToLine(Coords.ZERO, target, o.coords()) < (tryingToFire ? (BOT_BULLET_RADIUS + 1) : (2 * BOT_RADIUS + 1))
-                ).findAny().orElse(null);*/
                 if (findObstacle(true)) {
-                    addTask(new Task(priority + 1) {
-                        private double leftToGo = 0;
-                        private int leftToTurn = -2;
-                        @Override
-                        boolean step() {
-                            if (leftToTurn >= 0) {
-                                stepTurn(Parameters.Direction.RIGHT);
-                                leftToTurn--;
-                                return true;
-                            }
-                            if (findObstacle(true)) {
-                                sendLogMessage(id + " turning to avoid obstacle");
-                                stepTurn(Parameters.Direction.RIGHT);
-                                if (leftToTurn == -2) leftToTurn = 20;
-                                leftToGo = 120;
-                                return true;
-                            }
-                            leftToTurn = -2;
-                            if (leftToGo > 0) {
-                                sendLogMessage(id + " avoiding obstacle");
-                                move();
-                                leftToGo -= getSpeed();
-                                return true;
-                            }
-                            return false;
-                        }
-                    });
+                    addTask(avoidObtsacleTask(priority));
                     return true;
                 }
                 if (!isScout) {
@@ -433,10 +585,6 @@ public class Main extends Brain {
         tryMove(false);
     }
 
-    private boolean typeIsOpponent(IRadarResult.Types type) {
-        return type == IRadarResult.Types.OpponentMainBot || type == IRadarResult.Types.OpponentSecondaryBot;
-    }
-
     private double distanceToLine(Coords a, Coords b, Coords x) {
         Coords ab = b.minus(a);
         Coords ax = x.minus(a);
@@ -463,6 +611,9 @@ public class Main extends Brain {
         }
         boolean friendly() {
             return type == IRadarResult.Types.TeamMainBot || type == IRadarResult.Types.TeamSecondaryBot;
+        }
+        boolean wreck() {
+            return type == IRadarResult.Types.Wreck;
         }
         boolean bullet() {
             return type == IRadarResult.Types.BULLET;
@@ -507,9 +658,11 @@ public class Main extends Brain {
     private Stream<Target> getRelativeTargets() {
         return absoluteTargets.stream().map(t -> t.relativeTo(myPos));
     }
-
+    private List<Coords> teamMates = new ArrayList<>();
     private void detectEnemies() {
         var foundTargets = new TargetSet();
+        teamMates.clear();
+        absoluteTargets.clear();
         foundTargets.add(myPos, turn, isScout ? IRadarResult.Types.TeamSecondaryBot : IRadarResult.Types.TeamMainBot);
 
         for (IRadarResult r : detectRadar()) {
@@ -518,14 +671,23 @@ public class Main extends Brain {
         }
         StringBuilder targetsBroadcast = new StringBuilder("coords ").append(id);
         for (Target target : foundTargets) {
+         
             targetsBroadcast
                 .append(" ").append(target.coords.x())
                 .append(";").append(target.coords.y())
                 .append(";").append(target.type.name());
         }
         broadcast(targetsBroadcast.toString());
+        StringBuilder myPositionString = new StringBuilder("pos ").append(id)
+            .append(" ").append(myPos.x())
+            .append(";").append(myPos.y())
+        ;
+        broadcast(myPositionString.toString());
+
+
         for (var t: foundTargets) {
-            absoluteTargets.add(t.coords, t.turn, t.type);
+            if(t.enemy() ) 
+                absoluteTargets.add(t.coords, t.turn, t.type);
         }
         for (String message : getMessages()) {
             if (message.startsWith("coords")) {
@@ -539,7 +701,19 @@ public class Main extends Brain {
                     absoluteTargets.add(new Coords(x, y), turn, type);
                 }
             }
+            if (message.startsWith("pos")) {
+                String[] split = message.split(" ");
+                String teamId = split[1];
+                if (id.equals(teamId)) continue;
+                for (int i = 2; i < split.length; i++) {
+                    String[] data = split[i].split(";");
+                    double x = Double.parseDouble(data[0]), y = Double.parseDouble(data[1]);
+                    teamMates.add(new Coords(x, y));
+                }
+            }
         }
+        // sort the targets by distance
+        absoluteTargets.sort(Comparator.comparingDouble(t -> t.coords.norm()));
         discardMessages();
     }
 
@@ -557,6 +731,7 @@ public class Main extends Brain {
         if (turn - firedTurn < 21) return false;
         fire(direction);
         firedTurn = turn;
+        isFiring = true;
         return true;
     }
  
