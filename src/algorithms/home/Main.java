@@ -9,8 +9,6 @@ package algorithms.home;
 import characteristics.IFrontSensorResult;
 import characteristics.IRadarResult;
 import characteristics.Parameters;
-import commun.GroCervo;
-import helpers.MathHelp;
 import robotsimulator.Bot;
 import robotsimulator.Brain;
 import robotsimulator.SimulatorEngine;
@@ -36,7 +34,7 @@ public class Main extends Brain {
     public Main() {
         super();
         this.myId = robotId;
-        robotId++;
+        robotId = (robotId + 1) % 5;
     }
 
     public static boolean isMain(Integer id) { return id < 3; }
@@ -216,35 +214,61 @@ public class Main extends Brain {
         super.bind(bot);
     }
     private void NotSoFun(){
-        try{
-            engine = (SimulatorEngine)getAttribute(bot, "engine");
-            aMain1 = (Bot)getAttribute(engine, "aMain1");
-            aMain2 = (Bot)getAttribute(engine, "aMain2");
-            aMain3 = (Bot)getAttribute(engine, "aMain3");
-            aSecondary1 = (Bot)getAttribute(engine, "aSecondary1");
-            aSecondary2 = (Bot)getAttribute(engine, "aSecondary2");
-            bMain1 = (Bot)getAttribute(engine, "bMain1");
-            bMain2 = (Bot)getAttribute(engine, "bMain2");
-            bMain3 = (Bot)getAttribute(engine, "bMain3");
-            bSecondary1 = (Bot)getAttribute(engine, "bSecondary1");
-            bSecondary2 = (Bot)getAttribute(engine, "bSecondary2");
-            teamA.addAll(List.of(aMain1, aMain2, aMain3, aSecondary1, aSecondary2));
-            teamB.addAll(List.of(bMain1, bMain2, bMain3, bSecondary1, bSecondary2));
-            ArrayList<Bot> myTeam = isTeamA?teamA:teamB;
-            (myTeam).forEach(bot ->{
-                try {
-                    Field field = bot.getClass().getDeclaredField("frontRange");
-                    field.setAccessible(true);
-                    field.setDouble(bot,500);
-                } catch (Exception e) {
-                }
-            } );
-        }
-        catch(Exception e){
-            System.out.println("Error");
-        }
+        // try{
+        //     engine = (SimulatorEngine)getAttribute(bot, "engine");
+        //     aMain1 = (Bot)getAttribute(engine, "aMain1");
+        //     aMain2 = (Bot)getAttribute(engine, "aMain2");
+        //     aMain3 = (Bot)getAttribute(engine, "aMain3");
+        //     aSecondary1 = (Bot)getAttribute(engine, "aSecondary1");
+        //     aSecondary2 = (Bot)getAttribute(engine, "aSecondary2");
+        //     bMain1 = (Bot)getAttribute(engine, "bMain1");
+        //     bMain2 = (Bot)getAttribute(engine, "bMain2");
+        //     bMain3 = (Bot)getAttribute(engine, "bMain3");
+        //     bSecondary1 = (Bot)getAttribute(engine, "bSecondary1");
+        //     bSecondary2 = (Bot)getAttribute(engine, "bSecondary2");
+        //     teamA.addAll(List.of(aMain1, aMain2, aMain3, aSecondary1, aSecondary2));
+        //     teamB.addAll(List.of(bMain1, bMain2, bMain3, bSecondary1, bSecondary2));
+        //     ArrayList<Bot> myTeam = isTeamA?teamA:teamB;
+        //     (myTeam).forEach(bot ->{
+        //         try {
+        //             Field field = bot.getClass().getDeclaredField("frontRange");
+        //             field.setAccessible(true);
+        //             field.setDouble(bot,500);
+        //         } catch (Exception e) {
+        //         }
+        //     } );
+        // }
+        // catch(Exception e){
+        //     System.out.println("Error");
+        // }
 
     } 
+    private Task fireOnEnnemyTask(){
+        return new Main.Task(9_000_000, true) {
+            boolean step() {
+                var targetClear = getRelativeTargets()
+                    .filter(t -> turn - t.turn < 200)
+                    .filter(Target::enemy)
+                    .filter(t -> t.coords().norm() < Parameters.bulletRange )
+                    .filter(t -> tryFindAngle(Coords.ZERO, t) != null)
+                    .min(Comparator.comparingDouble(t -> t.coords().norm())).orElse(null);
+
+                if (targetClear != null) {
+
+                    Coords t = tryFindAngle(Coords.ZERO, targetClear);
+                    if (t != null) {
+                        sendLogMessage(id + " firing at " + t);
+                        if (tryFire(t.angle())) return true;
+                        if (targetClear.coords.norm() < 800) return true;
+                        return false;
+                    }
+                }else{
+                        stopFiring(); // Désactiver isFiring si le robot n'a plus de cible
+                }
+                return false;
+            }
+        };
+    }
     public void stopFiring() {
         isFiring = false;
     }
@@ -446,31 +470,7 @@ public class Main extends Brain {
         //         return false;
         //     }
         // });
-        if (!isScout) addTask(new Task(9_000_000, true) {
-            @Override
-            boolean step() {
-                var targetClear = getRelativeTargets()
-                    .filter(t -> turn - t.turn < 200)
-                    .filter(Target::enemy)
-                    .filter(t -> t.coords().norm() < Parameters.bulletRange - BOT_RADIUS)
-                    .filter(t -> tryFindAngle(Coords.ZERO, t) != null)
-                    .min(Comparator.comparingDouble(t -> t.coords().norm())).orElse(null);
-
-                if (targetClear != null) {
-
-                    Coords t = tryFindAngle(Coords.ZERO, targetClear);
-                    if (t != null) {
-                        sendLogMessage(id + " firing at " + t);
-                        if (tryFire(t.angle())) return true;
-                        if (targetClear.coords.norm() < 800) return true;
-                        return false;
-                    }
-                }else{
-                        stopFiring(); // Désactiver isFiring si le robot n'a plus de cible
-                }
-                return false;
-            }
-        });
+        if (!isScout) addTask(fireOnEnnemyTask());
 
         if (!isScout) addTask(new Task(7_500_000, true) {
             @Override
@@ -510,12 +510,16 @@ public class Main extends Brain {
                     addTask(avoidObtsacleTask(priority));
                     return true;
                 }
+                var task = fireOnEnnemyTask();
+                addTask(task);
+                task.step();
                 if (!isScout) {
                     if (turnUntil(lastAngle)) {
                         sendLogMessage(id + " turning");
                         return true;
                     }
                 }
+              
                 sendLogMessage(id + " moving");
                 move();
                 return true;

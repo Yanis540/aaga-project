@@ -63,7 +63,7 @@ public class Main extends GroCervo {
         try {
             Field field = bot.getClass().getDeclaredField("frontRange");
             field.setAccessible(true);
-            field.setDouble(bot,500);
+            // field.setDouble(bot,500);
         } catch (Exception e) {
         }
       } );
